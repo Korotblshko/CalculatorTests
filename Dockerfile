@@ -1,12 +1,27 @@
-# Стадия сборки
-FROM maven:3.9.9-eclipse-temurin-17 AS build
-WORKDIR /app
-COPY pom.xml .
-COPY src ./src
-RUN mvn clean package -DskipTests  # можно убрать -DskipTests, если хочешь тесты в билде
+# Стадия сборки: Maven + JDK 21
+FROM maven:3.9.9-eclipse-temurin-21 AS builder
 
-# Стадия запуска
-FROM eclipse-temurin:17-jre
+WORKDIR /build
+
+# Сначала копируем pom.xml для кэширования зависимостей
+COPY pom.xml .
+
+# Скачиваем зависимости (кэшируется)
+RUN mvn dependency:go-offline -B
+
+# Копируем исходники
+COPY src ./src
+
+# Собираем
+RUN mvn clean package -DskipTests
+
+# Стадия запуска: только JRE 21
+FROM eclipse-temurin:21-jre-alpine
+
 WORKDIR /app
-COPY --from=build /app/target/calculator-1.0-SNAPSHOT.jar app.jar
+
+# Копируем готовый JAR
+COPY --from=builder /build/target/calculator-1.0-SNAPSHOT.jar app.jar
+
+# Запуск приложения
 CMD ["java", "-jar", "app.jar"]
